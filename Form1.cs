@@ -64,41 +64,49 @@ namespace EncryptXML
         {
             // Create a new AES key.
             key = Aes.Create();
-            
-            //Select specified element to encrypt
-            XmlElement elementToEncrypt = doc.GetElementsByTagName(cbElement.Text)[0] as XmlElement;
 
-
+            //instance of the encrypted xml
             EncryptedXml eXml = new EncryptedXml();
+            //byte[] encryptedElement;
+            List<byte[]> encryptedElement = new List<byte[]>();
+            XmlNodeList elementsToEncrypt = doc.GetElementsByTagName(cbElement.Text);
 
-            byte[] encryptedElement = eXml.EncryptData(elementToEncrypt, key, false);
-
-            EncryptedData edElement = new EncryptedData();
-            edElement.Type = EncryptedXml.XmlEncElementUrl;
-
-            string encryptionMethod = null;
-
-            if (key is Aes)
+            foreach (XmlNode elementToEncrypt in elementsToEncrypt)
             {
-                encryptionMethod = EncryptedXml.XmlEncAES256Url;
+                encryptedElement.Add(eXml.EncryptData(elementToEncrypt as XmlElement, key, false));
             }
-            else
+            //Select specified element to encrypt
+            //XmlElement elementToEncrypt = doc.GetElementsByTagName(cbElement.Text)[0] as XmlElement;
+
+
+
+            //URL identifier of the encrypted XML element
+            EncryptedData[] edElements = new EncryptedData[encryptedElement.Count];
+
+            for (int i = 0; i< encryptedElement.Count;i++)
             {
-                // Throw an exception if the transform is not AES
-                throw new CryptographicException("The specified algorithm is not supported or not recommended for XML Encryption.");
+                edElements[i] = new EncryptedData();
+
+                edElements[i].Type = EncryptedXml.XmlEncElementUrl;
+
+                edElements[i].EncryptionMethod = new EncryptionMethod(EncryptedXml.XmlEncAES256Url);
+
+                edElements[i].CipherData.CipherValue = encryptedElement[i];
+                
+                //Replace the original element by the encrypted one
+
+                EncryptedXml.ReplaceElement(elementsToEncrypt[0] as XmlElement, edElements[i], false);
+
+
             }
 
-            edElement.EncryptionMethod = new EncryptionMethod(encryptionMethod);
 
-            edElement.CipherData.CipherValue = encryptedElement;
-
-            EncryptedXml.ReplaceElement(elementToEncrypt, edElement, false);
-
+            //Save the doc and write it back encrypted
             StringWriter sw = new StringWriter();
             doc.Save(sw);
             rtDoc.Clear();
             rtDoc.Text = sw.ToString();
-            //https://docs.microsoft.com/en-us/dotnet/standard/security/how-to-encrypt-xml-elements-with-symmetric-keys
+            txtKey.Text = key.Key.ToString();
         }
 
 
