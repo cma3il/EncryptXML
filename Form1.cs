@@ -28,15 +28,20 @@ namespace EncryptXML
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            doc = new XmlDocument();
+            
+            // Create a new AES key.
+            key = Aes.Create();
 
         }
 
         private void btnLoadXML_Click(object sender, EventArgs e)
         {
+            //TODO fix reloading new xml 
             cbElement.Items.Clear();
+            doc = new XmlDocument();
             try
             {
+                
                 doc.LoadXml(rtDoc.Text);
             }
             catch (Exception ex)
@@ -45,10 +50,7 @@ namespace EncryptXML
             }
 
 
-
-
-
-            foreach (System.Xml.XmlNode node in doc.GetElementsByTagName("*"))
+            foreach (XmlNode node in doc.GetElementsByTagName("*"))
             {
 
                 if (!elements.Contains(node.Name))
@@ -63,21 +65,32 @@ namespace EncryptXML
 
         private void btnEncrypt_Click(object sender, EventArgs e)
         {
-            // Create a new AES key.
-            key = Aes.Create();
+            
+            Encrypt(doc, cbElement.Text, key);
 
+
+            //Save the doc and write it back encrypted
+            StringWriter sw = new StringWriter();
+            doc.Save(sw);
+            rtDoc.Clear();
+            rtDoc.Text = sw.ToString();
+           // txtKey.Text = key.Key.ToString();
+        }
+
+        public static void Encrypt(XmlDocument doc, string elementName, SymmetricAlgorithm key)
+        {
+            //couldve handled the iteration like I did in Decrypt function, wouldve been cleaner but its 2AM n im too lazy to go through this one may be later
             //instance of the encrypted xml
             EncryptedXml eXml = new EncryptedXml();
-            //byte[] encryptedElement;
             List<byte[]> encryptedElement = new List<byte[]>();
-            XmlNodeList elementsToEncrypt = doc.GetElementsByTagName(cbElement.Text);
+            XmlNodeList elementsToEncrypt = doc.GetElementsByTagName(elementName);
+
+            //Select specified elements to encrypt
 
             foreach (XmlNode elementToEncrypt in elementsToEncrypt)
             {
                 encryptedElement.Add(eXml.EncryptData(elementToEncrypt as XmlElement, key, false));
             }
-            //Select specified element to encrypt
-            //XmlElement elementToEncrypt = doc.GetElementsByTagName(cbElement.Text)[0] as XmlElement;
 
 
 
@@ -100,16 +113,48 @@ namespace EncryptXML
 
 
             }
+            if (encryptedElement.Count > 0)
+                MessageBox.Show(encryptedElement.Count + " elements encrypted successfuly!");
+        }
 
+        public static void Decrypt(XmlDocument doc, SymmetricAlgorithm Alg)
+        {
+
+            // Create an EncryptedData object and populate it.
+            EncryptedData edElement = new EncryptedData();
+
+            // Create a new EncryptedXml object.
+            EncryptedXml exml = new EncryptedXml();
+
+            // Find the EncryptedData element in the XmlDocument.
+            XmlElement encryptedElement = doc.GetElementsByTagName("EncryptedData")[0] as XmlElement;
+            edElement.LoadXml(encryptedElement as XmlElement);
+
+            // Decrypt the element using the symmetric key.
+            byte[] rgbOutput = exml.DecryptData(edElement, Alg);
+            // Replace the encryptedData element with the plaintext XML element.
+            exml.ReplaceData(encryptedElement, rgbOutput);
+
+         
+        }
+
+        private void btnDecypt_Click(object sender, EventArgs e)
+        {
+            int count = 0;
+            while(doc.GetElementsByTagName("EncryptedData").Count != 0)
+            {
+                count++;
+                Decrypt(doc, key);
+            }
+            
 
             //Save the doc and write it back encrypted
             StringWriter sw = new StringWriter();
             doc.Save(sw);
             rtDoc.Clear();
             rtDoc.Text = sw.ToString();
-            txtKey.Text = key.Key.ToString();
+            if(count>0)
+                MessageBox.Show(count + " elements encrypted successfuly!");
         }
-
-
     }
 }

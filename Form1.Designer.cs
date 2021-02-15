@@ -67,6 +67,7 @@ namespace EncryptXML
             this.btnDecypt.TabIndex = 3;
             this.btnDecypt.Text = " Decrypt";
             this.btnDecypt.UseVisualStyleBackColor = true;
+            this.btnDecypt.Click += new System.EventHandler(this.btnDecypt_Click);
             // 
             // label1
             // 
