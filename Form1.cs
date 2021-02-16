@@ -19,7 +19,7 @@ namespace EncryptXML
     {
         XmlDocument doc;
         ArrayList elements = new ArrayList();
-        Aes key = null;
+        
 
         public Form1()
         {
@@ -29,8 +29,8 @@ namespace EncryptXML
         private void Form1_Load(object sender, EventArgs e)
         {
             
-            // Create a new AES key.
-            key = Aes.Create();
+            
+            
 
         }
 
@@ -44,7 +44,7 @@ namespace EncryptXML
                 
                 doc.LoadXml(rtDoc.Text);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 MessageBox.Show("Check your XML code", "Error");
             }
@@ -65,7 +65,9 @@ namespace EncryptXML
 
         private void btnEncrypt_Click(object sender, EventArgs e)
         {
-            
+            // Create a new AES key.
+            Aes key = Aes.Create();
+
             Encrypt(doc, cbElement.Text, key);
 
 
@@ -74,7 +76,9 @@ namespace EncryptXML
             doc.Save(sw);
             rtDoc.Clear();
             rtDoc.Text = sw.ToString();
-           // txtKey.Text = key.Key.ToString();
+
+            //I know I shouldn't do that, however the goal from this project is to just tinker with XML Encryption, use a secure key-exchange method!
+            txtKey.Text = Convert.ToBase64String(key.Key);
         }
 
         public static void Encrypt(XmlDocument doc, string elementName, SymmetricAlgorithm key)
@@ -94,7 +98,7 @@ namespace EncryptXML
 
 
 
-            //URL identifier of the encrypted XML element
+            //identifiers for the encrypted XML element
             EncryptedData[] edElements = new EncryptedData[encryptedElement.Count];
 
             for (int i = 0; i < encryptedElement.Count; i++)
@@ -140,11 +144,36 @@ namespace EncryptXML
 
         private void btnDecypt_Click(object sender, EventArgs e)
         {
+            Aes key = Aes.Create();
+            try
+            {
+                //yeah yeah
+                key.Key = Convert.FromBase64String(txtKey.Text);
+            }
+            catch (FormatException)
+            {
+                ; ;
+            }
+            
+
             int count = 0;
             while(doc.GetElementsByTagName("EncryptedData").Count != 0)
             {
-                count++;
-                Decrypt(doc, key);
+                
+                try
+                {
+
+                    Decrypt(doc, key);
+                    count++;
+                }
+                catch (Exception)
+                {
+                    MessageBox.Show("Wrong key", "Error");
+                    count = 0;
+                    break;
+                }
+                
+                
             }
             
 
