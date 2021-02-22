@@ -18,7 +18,7 @@ namespace EncryptXML
     public partial class Form1 : Form
     {
         XmlDocument doc;
-        ArrayList elements = new ArrayList();
+        
         
 
         public Form1()
@@ -36,92 +36,131 @@ namespace EncryptXML
 
         private void btnLoadXML_Click(object sender, EventArgs e)
         {
-            //TODO fix reloading new xml 
+            
             cbElement.Items.Clear();
+            cbElement.Text = "";
+            txtKey.Text = "";
+            txtRSA.Text = "";
+
             doc = new XmlDocument();
             try
             {
                 
                 doc.LoadXml(rtDoc.Text);
+               
+
+                foreach (XmlNode node in doc.GetElementsByTagName("*"))
+                {
+
+                    if (!cbElement.Items.Contains(node.Name))
+                    {
+                        cbElement.Items.Add(node.Name);
+                   }
+
+                }
+                btnEncrypt.Enabled = true;
+                btnDecypt.Enabled = true;
+                btnSign.Enabled = true;
+                btnVerify.Enabled = true;
+                MessageBox.Show("XML data loaded successfuly", "INFO");
             }
             catch (Exception)
             {
-                MessageBox.Show("Check your XML code", "Error");
+                MessageBox.Show("Your XML is not well-formed", "ERROR");
+                btnEncrypt.Enabled = false;
+                btnDecypt.Enabled = false;
+                btnSign.Enabled = false;
+                btnVerify.Enabled = false;
             }
 
 
-            foreach (XmlNode node in doc.GetElementsByTagName("*"))
-            {
 
-                if (!elements.Contains(node.Name))
-                {
-                    elements.Add(node.Name);
-                    cbElement.Items.Add(node.Name);
-                }
-
-            }
 
         }
 
         private void btnEncrypt_Click(object sender, EventArgs e)
         {
-            // Create a new AES key.
-            Aes key = Aes.Create();
+            
+            
+            if (cbElement.Text=="")
+                MessageBox.Show("Please select an XML element first", "ERROR");
+            else
+            {
+                // Create a new AES key.
+                Aes key = Aes.Create();
+                
+                int count = 0;
+                
+                while (doc.GetElementsByTagName(cbElement.Text).Count != 0)
+                {
 
-            Encrypt(doc, cbElement.Text, key);
+                    try
+                    {
+
+                        Encrypt(doc, cbElement.Text, key);
+                        count++;
+                    }
+                    catch (Exception)
+                    {
+                        MessageBox.Show("Encryption error", "ERROR");
+                        count = 0;
+                        break;
+                    }
 
 
-            //Save the doc and write it back encrypted
-            StringWriter sw = new StringWriter();
-            doc.Save(sw);
-            rtDoc.Clear();
-            rtDoc.Text = sw.ToString();
+                }
+                
+                //Save the doc and write it back encrypted
+                StringWriter sw = new StringWriter();
+                doc.Save(sw);
+                rtDoc.Clear();
+                rtDoc.Text = sw.ToString();
 
-            //I know I shouldn't do that, however the goal from this project is to just tinker with XML Encryption, use a secure key-exchange method!
-            txtKey.Text = Convert.ToBase64String(key.Key);
+                //I know I shouldn't do that, however the goal from this project is to just tinker with XML Encryption, use a secure key-exchange method!
+                txtKey.Text = Convert.ToBase64String(key.Key);
+                
+                btnEncrypt.Enabled = false;
+                if (count > 0)
+                    MessageBox.Show(count + " elements encrypted successfuly!");
+            }
+                
+
+
+            
+
         }
 
         public static void Encrypt(XmlDocument doc, string elementName, SymmetricAlgorithm key)
         {
-            //couldve handled the iteration like I did in Decrypt function, wouldve been cleaner but its 2AM n im too lazy to go through this one may be later
             //instance of the encrypted xml
             EncryptedXml eXml = new EncryptedXml();
-            List<byte[]> encryptedElement = new List<byte[]>();
-            XmlNodeList elementsToEncrypt = doc.GetElementsByTagName(elementName);
 
             //Select specified elements to encrypt
-
-            foreach (XmlNode elementToEncrypt in elementsToEncrypt)
-            {
-                encryptedElement.Add(eXml.EncryptData(elementToEncrypt as XmlElement, key, false));
-            }
+            XmlElement elementToEncrypt = doc.GetElementsByTagName(elementName)[0] as XmlElement;
 
 
+            //Encrypt using the key
+            byte[] encryptedElement = eXml.EncryptData(elementToEncrypt, key, false);
+            
 
             //identifiers for the encrypted XML element
-            EncryptedData[] edElements = new EncryptedData[encryptedElement.Count];
+            EncryptedData edElement = new EncryptedData();
 
-            for (int i = 0; i < encryptedElement.Count; i++)
-            {
-                edElements[i] = new EncryptedData();
+                edElement = new EncryptedData();
 
-                edElements[i].Type = EncryptedXml.XmlEncElementUrl;
+                edElement.Type = EncryptedXml.XmlEncElementUrl;
 
-                edElements[i].EncryptionMethod = new EncryptionMethod(EncryptedXml.XmlEncAES256Url);
+                edElement.EncryptionMethod = new EncryptionMethod(EncryptedXml.XmlEncAES256Url);
 
-                edElements[i].CipherData.CipherValue = encryptedElement[i];
+                edElement.CipherData.CipherValue = encryptedElement;
 
-                //Replace the original element by the encrypted one
+            //Replace the original element by the encrypted one
 
-                EncryptedXml.ReplaceElement(elementsToEncrypt[0] as XmlElement, edElements[i], false);
+            EncryptedXml.ReplaceElement(elementToEncrypt, edElement, false);
 
-
-            }
-            if (encryptedElement.Count > 0)
-                MessageBox.Show(encryptedElement.Count + " elements encrypted successfuly!");
         }
 
-        public static void Decrypt(XmlDocument doc, SymmetricAlgorithm Alg)
+        public static void Decrypt(XmlDocument doc, SymmetricAlgorithm key)
         {
 
             // Create an EncryptedData object and populate it.
@@ -135,7 +174,7 @@ namespace EncryptXML
             edElement.LoadXml(encryptedElement as XmlElement);
 
             // Decrypt the element using the symmetric key.
-            byte[] rgbOutput = exml.DecryptData(edElement, Alg);
+            byte[] rgbOutput = exml.DecryptData(edElement, key);
             // Replace the encryptedData element with the plaintext XML element.
             exml.ReplaceData(encryptedElement, rgbOutput);
 
@@ -144,46 +183,150 @@ namespace EncryptXML
 
         private void btnDecypt_Click(object sender, EventArgs e)
         {
-            Aes key = Aes.Create();
-            try
+            if (txtKey.Text == "")
+                MessageBox.Show("Please enter a decryption key","ERROR");
+            else
             {
-                //yeah yeah
-                key.Key = Convert.FromBase64String(txtKey.Text);
-            }
-            catch (FormatException)
-            {
-                ; ;
-            }
-            
-
-            int count = 0;
-            while(doc.GetElementsByTagName("EncryptedData").Count != 0)
-            {
-                
+                Aes key = Aes.Create();
                 try
                 {
-
-                    Decrypt(doc, key);
-                    count++;
+                    //yeah yeah
+                    key.Key = Convert.FromBase64String(txtKey.Text);
                 }
-                catch (Exception)
+                catch (FormatException)
                 {
-                    MessageBox.Show("Wrong key", "Error");
-                    count = 0;
-                    break;
+                    ; ;
                 }
-                
-                
+
+
+                int count = 0;
+                if (doc.GetElementsByTagName("EncryptedData").Count == 0)
+                    MessageBox.Show("Nothing to decrypt here.", "ERROR");
+                while (doc.GetElementsByTagName("EncryptedData").Count != 0)
+                {
+
+                    try
+                    {
+
+                        Decrypt(doc, key);
+                        count++;
+                    }
+                    catch (Exception)
+                    {
+                        MessageBox.Show("The decryption key you provided is invalid", "ERROR");
+                        count = 0;
+                        break;
+                    }
+
+
+                }
+
+
+                //Save the doc and write it back encrypted
+                StringWriter sw = new StringWriter();
+                doc.Save(sw);
+                rtDoc.Clear();
+                rtDoc.Text = sw.ToString();
+                if (count > 0)
+                    MessageBox.Show(count + " elements decrypted successfuly!");
             }
+        }
+
+        private void label5_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void btnSign_Click(object sender, EventArgs e)
+        {
+
             
 
+            // Create a new RSA signing key and save it in the container.
+            RSACryptoServiceProvider rsaKey = new RSACryptoServiceProvider();
+
+            SignXml(doc, rsaKey);
             //Save the doc and write it back encrypted
             StringWriter sw = new StringWriter();
             doc.Save(sw);
             rtDoc.Clear();
             rtDoc.Text = sw.ToString();
-            if(count>0)
-                MessageBox.Show(count + " elements encrypted successfuly!");
+
+            txtRSA.Text =  rsaKey.ToXmlString(false);
+
+            MessageBox.Show("Document signed successfully!","INFO");
+            btnSign.Enabled = false;
+        }
+
+        public static void SignXml(XmlDocument xmlDoc, RSA rsaKey)
+        {
+           
+
+            // Create a SignedXml object.
+            SignedXml signedXml = new SignedXml(xmlDoc);
+
+            // Add the key to the SignedXml document.
+            signedXml.SigningKey = rsaKey;
+
+            // Create a reference to be signed.
+            Reference reference = new Reference();
+            reference.Uri = "";
+
+            // Add an enveloped transformation to the reference.
+            XmlDsigEnvelopedSignatureTransform env = new XmlDsigEnvelopedSignatureTransform();
+            reference.AddTransform(env);
+
+            // Add the reference to the SignedXml object.
+            signedXml.AddReference(reference);
+
+            // Compute the signature.
+            signedXml.ComputeSignature();
+
+            // Get the XML representation of the signature and save
+            // it to an XmlElement object.
+            XmlElement xmlDigitalSignature = signedXml.GetXml();
+
+            // Append the element to the XML document.
+            xmlDoc.DocumentElement.AppendChild(xmlDoc.ImportNode(xmlDigitalSignature, true));
+        }
+
+        private void label2_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void btnVerify_Click(object sender, EventArgs e)
+        {
+            if (txtRSA.Text!="")
+            {
+                RSACryptoServiceProvider rsaKey = new RSACryptoServiceProvider();
+
+                rsaKey.FromXmlString(txtRSA.Text);
+
+                if (VerifyXml(doc, rsaKey))
+                    MessageBox.Show("Signature valid !");
+                else
+                    MessageBox.Show("Signature is NOT valid !");
+            }
+            
+
+        }
+        public static Boolean VerifyXml(XmlDocument xmlDoc, RSA key)
+        {
+
+            // Create a new SignedXml object and pass it
+            // the XML document class.
+            SignedXml signedXml = new SignedXml(xmlDoc);
+
+            // Find the "Signature" node and create a new
+            // XmlNodeList object.
+            XmlNodeList nodeList = xmlDoc.GetElementsByTagName("Signature");
+
+            // Load the first <signature> node.
+            signedXml.LoadXml((XmlElement)nodeList[0]);
+
+            // Check the signature and return the result.
+            return signedXml.CheckSignature(key);
         }
     }
 }
